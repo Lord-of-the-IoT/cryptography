@@ -23,11 +23,11 @@ class RSA:
                 file.write(self.privateKey.save_pkcs1('PEM'))
 
     def encrypt(self, digest : str) -> bytes:
-        #encrypts the given digest with the public key and then returns result
+        #encrypts the given string digest with the public key and then returns bytes
         return rsa.encrypt(digest.encode('ascii'), self.publicKey)
     
     def decrypt(self, digest: bytes):
-        #decrypts the given digest with the private key and then returns result
+        #decrypts the given bytes digest with the private key and then returns string or false
         try: return rsa.decrypt(digest, self.privateKey).decode('ascii')
         except: return False
 
