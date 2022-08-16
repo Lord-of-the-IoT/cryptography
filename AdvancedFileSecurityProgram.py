@@ -8,6 +8,7 @@ import blowfish
 from pyblake2 import blake2b
 
 import getpass, os, sys, time
+import pickle
 
 class FileEncrypter:
     def GetFileContent(self, filename: str) -> bytes:
@@ -54,7 +55,7 @@ class FileEncrypter:
         Blowfish = blowfish.Cipher(key, byte_order=byte_order) #creates BlowFish object with correct-endian byte order
         if statusBar: print('|'*percent*25,end='')
         digest = b''.join(Blowfish.decrypt_cbc(digest, IV)) #decrypts message with ecb mode
-        if statusBar: print('|'*percent*100,end='')
+        if statusBar: print('|'*percent*50,end='')
         digest = digest[:-int(digest[-1])] #gets the size of the padding and removes the padding
         return digest
 
@@ -63,8 +64,12 @@ class UI:
         self.encrypter = FileEncrypter()
         self.name = 'Advanced File Security Program'
         self.error = '\033[1;31mINVALID OPTION\033[0m'
+        self.saved_content = dict()
         while True:
-            self.MainPage()
+            try:
+                self.MainPage()
+            except KeyboardInterrupt:
+                pass
 
     def MainPage(self):
         self.show_head(self.name)
@@ -76,51 +81,52 @@ class UI:
             return
         if option == '1':
             content, filename = self.choose_file('encryption')
-            if not content: self.choose_file('encryption')
-            if not self.encrypt(content, filename): self.encrypt(content, filename)
+            while content==False: content, filename = self.choose_file('encryption')
+            self.encrypt(content, filename)
+            #if not self.encrypt(content, filename): self.encrypt(content, filename)
         elif option == '2':
             content, filename = self.choose_file('decryption')
-            if not content: self.choose_file('decryption')
+            while content==False: content, filename = self.choose_file('decryption')
             if not self.decrypt(content, filename): self.decrypt(content, filename)
-        
-        
+              
     def choose_file(self, option):
         self.show_head(f'Option: {option}')
-        print('\n\n\tfiles:')
+        print('\n\n\tfiles:', end='')
+        terminal_width  = os.get_terminal_size().columns
+        num_spaces = terminal_width - 25 - len(os.getcwd())
+        print(f'{" "*num_spaces}cwd: {os.getcwd()}')
         files = ['..']+os.listdir()
         i=0
         for filename in files: #displays files
             i+=1
             if os.path.isdir(filename): print(f'\t[{i}] \033[31m{filename}\033[0m')
             else: print(f'\t[{i}] {filename}')
-        print('\n\tenter file number to select file, else enter mv <directory> or mv <directory number> to change directory')
-        option = input('\t>').strip()
-        if 'mv' in option: #changing directory
-            directory = option.split()[1]
-            if directory.isdigit():
-                directory = files[int(directory)-1]
-            os.chdir(directory)
+        print('\n\tenter file number to select file or directory, or ctrl+c to cancel')
+        option = input(f'\t>').strip()
+        if option.isdigit(): option = files[int(option)-1]
+        if os.path.isdir(option): #changing directory
+            os.chdir(option)
             return False, False
+        elif os.path.isfile(f'{os.getcwd()}/{option}'):
+            content = self.encrypter.GetFileContent(filename)
+            return content, filename
         else:
-            if option.isdigit():
-                filename = files[int(option)-1]
-                return self.encrypter.GetFileContent(filename), filename
-            else:
-                print(self.error)
-                return False, False
+            print(self.error)
+            time.sleep(2)
+            return False, False
 
     def encrypt(self, content, filename):
         self.show_head('Option: encryption')
         password = getpass.getpass('\n\n\tPassword for encryption>')
         if input('\tBegin encryption? Y/N\n\t  >').lower().strip() != 'y':
-            print('\tEncryption cancelled')
+            self.show_error('\tEncryption cancelled')
             time.sleep(2)
             return True
         print('\n\tStatus:')
         digest = self.encrypter.Encrypt(content, password, True)
         print('\tcontent Encrypted!\n')
         if input('\tOverwrite file with encrypted content? this process is irreversible without the key Y/N\n\t  >').lower().strip() != 'y':
-            print('\tFile overwrite cancelled')
+            self.show_error('\tFile overwrite cancelled')
             time.sleep(2)
             return True
         self.encrypter.OverwriteFileContent(filename, digest)
@@ -131,21 +137,36 @@ class UI:
     def decrypt(self, content, filename):
         password = getpass.getpass('\n\n\tPassword for decryption>')
         if input('\tBegin decryption? Y/N\n\t  >').lower().strip() != 'y':
-            print('\tDecryption cancelled')
+            self.show_error('\tDecryption cancelled')
             time.sleep(2)
             return True
         print('\n\tStatus:')
-        message = self.encrypter.Decrypt(content, password, True)
+        try:
+            message = self.encrypter.Decrypt(content, password, True)
+        except ValueError:
+            self.show_error('File not encrypted')
+            time.sleep(2)
+            return True
         print('\tcontent Decrypted!\n')
         if input('\tOverwrite file with decrypted content? if not it will be stored in memory Y/N\n\t  >').lower().strip()=='y':
             print('\tOK, overwriting file')
             self.encrypter.OverwriteFileContent(filename, message)
+        else:
+            print(f'\tOk, file content saved in memory at adress {hex(id(message))}')
+            self.saved_content[filename] = hex(id(message))
         time.sleep(2)
         return True
+    
     def show_head(self, head):
         os.system('clear')
         terminal_width  = os.get_terminal_size().columns
         num_spaces = (terminal_width-len(head))//2
         print(' '*num_spaces+'\033[1m'+head+'\033[0m')
 
+    def show_error(self, string: str, exit=False, errnum=None):
+        print(f'\033[1;31m{string}\033[0m')
+        if exit: sys.exit(errnum)
 UI()
+f = FileEncrypter()
+
+print(f.GetFileContent('assets/exit.png'))
