@@ -1,14 +1,10 @@
 #!/bin/python3.10
 
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-
 import blowfish
 from pyblake2 import blake2b
 
 import getpass, os, sys, time
-import pickle
+from blessings import Terminal
 
 class FileEncrypter:
     def GetFileContent(self, filename: str) -> bytes:
@@ -16,8 +12,16 @@ class FileEncrypter:
             return file.read()
 
     def OverwriteFileContent(self, filename: str, content: bytes) -> bool:
-        with open(filename, 'wb') as file:
-            file.write(content)
+        try:
+            os.system(f'srm -z {filename}')
+            with open(filename, 'wb') as file:
+                file.write(content)
+            return True
+        except:
+            return False
+
+    def ShredFile(self, filename: str) -> bool:
+        os.system(f'srm -v {filename}')
 
     def Encrypt(self, message : bytes, key=False, statusBar=False) -> bytes:
         if statusBar: percent = (os.get_terminal_size().columns-20)//100
@@ -64,7 +68,7 @@ class UI:
         self.encrypter = FileEncrypter()
         self.name = 'Advanced File Security Program'
         self.error = '\033[1;31mINVALID OPTION\033[0m'
-        self.saved_content = dict()
+        self.terminal = Terminal
         while True:
             try:
                 self.MainPage()
@@ -148,15 +152,12 @@ class UI:
             time.sleep(2)
             return True
         print('\tcontent Decrypted!\n')
-        if input('\tOverwrite file with decrypted content? if not it will be stored in memory Y/N\n\t  >').lower().strip()=='y':
-            print('\tOK, overwriting file')
-            self.encrypter.OverwriteFileContent(filename, message)
-        else:
-            print(f'\tOk, file content saved in memory at adress {hex(id(message))}')
-            self.saved_content[filename] = hex(id(message))
+        self.encrypter.OverwriteFileContent(filename, message)
+        print('\nFile Overwrote!')
         time.sleep(2)
         return True
     
+    def shred(self, filename):
     def show_head(self, head):
         os.system('clear')
         terminal_width  = os.get_terminal_size().columns
